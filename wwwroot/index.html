@@ -8,17 +8,24 @@
     #messages { list-style: none; padding: 10px; height: 300px; overflow-y: auto;
                 border: 1px solid #ccc; }
     #messages li { margin-bottom: 6px; }
+    .system { color: #888; font-style: italic; }
     input { padding: 8px; }
     #message { width: 60%; }
+    #status { margin: 8px 0; color: #555; }
   </style>
 </head>
 <body>
   <h2>Realtime Chat</h2>
 
   <input id="user" placeholder="Your name" />
+  <input id="room" placeholder="Room (e.g. general)" />
+  <button id="join">Join room</button>
+  <div id="status">Not in a room</div>
+
   <ul id="messages"></ul>
-  <input id="message" placeholder="Type a message..." />
-  <button id="send">Send</button>
+
+  <input id="message" placeholder="Type a message..." disabled />
+  <button id="send" disabled>Send</button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
   <script>
@@ -27,28 +34,57 @@
       .withAutomaticReconnect()
       .build();
 
+    let currentRoom = null;
+    let currentUser = null;
+
+    const $ = id => document.getElementById(id);
+
     connection.on("ReceiveMessage", (user, message) => {
       const li = document.createElement("li");
       li.textContent = `${user}: ${message}`;
-      const list = document.getElementById("messages");
-      list.appendChild(li);
-      list.scrollTop = list.scrollHeight;
+      if (user === "System") li.className = "system";
+      $("messages").appendChild(li);
+      $("messages").scrollTop = $("messages").scrollHeight;
+    });
+
+    // After a connection drop, the server forgets our groups, so rejoin
+    connection.onreconnected(() => {
+      if (currentRoom) connection.invoke("JoinRoom", currentRoom, currentUser);
     });
 
     connection.start().catch(err => console.error(err));
 
+    async function joinRoom() {
+      const user = $("user").value.trim() || "Anonymous";
+      const room = $("room").value.trim().toLowerCase();
+      if (!room) return;
+
+      if (currentRoom) {
+        await connection.invoke("LeaveRoom", currentRoom, currentUser);
+      }
+      $("messages").innerHTML = "";
+      currentUser = user;
+      currentRoom = room;
+      await connection.invoke("JoinRoom", room, user);
+
+      $("status").textContent = `You are in #${room} as ${user}`;
+      $("message").disabled = false;
+      $("send").disabled = false;
+      $("message").focus();
+    }
+
     function send() {
-      const user = document.getElementById("user").value || "Anonymous";
-      const input = document.getElementById("message");
-      if (!input.value.trim()) return;
-      connection.invoke("SendMessage", user, input.value).catch(err => console.error(err));
+      const input = $("message");
+      if (!currentRoom || !input.value.trim()) return;
+      connection.invoke("SendMessage", currentRoom, currentUser, input.value)
+        .catch(err => console.error(err));
       input.value = "";
     }
 
-    document.getElementById("send").addEventListener("click", send);
-    document.getElementById("message").addEventListener("keydown", e => {
-      if (e.key === "Enter") send();
-    });
+    $("join").addEventListener("click", joinRoom);
+    $("send").addEventListener("click", send);
+    $("message").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+    $("room").addEventListener("keydown", e => { if (e.key === "Enter") joinRoom(); });
   </script>
 </body>
 </html>
