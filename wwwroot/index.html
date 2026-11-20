@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Realtime Chat</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; }
+    #messages { list-style: none; padding: 10px; height: 300px; overflow-y: auto;
+                border: 1px solid #ccc; }
+    #messages li { margin-bottom: 6px; }
+    input { padding: 8px; }
+    #message { width: 60%; }
+  </style>
+</head>
+<body>
+  <h2>Realtime Chat</h2>
+
+  <input id="user" placeholder="Your name" />
+  <ul id="messages"></ul>
+  <input id="message" placeholder="Type a message..." />
+  <button id="send">Send</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+  <script>
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl("/chatHub")
+      .withAutomaticReconnect()
+      .build();
+
+    connection.on("ReceiveMessage", (user, message) => {
+      const li = document.createElement("li");
+      li.textContent = `${user}: ${message}`;
+      const list = document.getElementById("messages");
+      list.appendChild(li);
+      list.scrollTop = list.scrollHeight;
+    });
+
+    connection.start().catch(err => console.error(err));
+
+    function send() {
+      const user = document.getElementById("user").value || "Anonymous";
+      const input = document.getElementById("message");
+      if (!input.value.trim()) return;
+      connection.invoke("SendMessage", user, input.value).catch(err => console.error(err));
+      input.value = "";
+    }
+
+    document.getElementById("send").addEventListener("click", send);
+    document.getElementById("message").addEventListener("keydown", e => {
+      if (e.key === "Enter") send();
+    });
+  </script>
+</body>
+</html>
