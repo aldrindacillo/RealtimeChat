@@ -39,12 +39,20 @@
 
     const $ = id => document.getElementById(id);
 
-    connection.on("ReceiveMessage", (user, message) => {
+        function addMessage(user, message, sentAt) {
       const li = document.createElement("li");
-      li.textContent = `${user}: ${message}`;
+      const time = new Date(sentAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      li.textContent = `[${time}] ${user}: ${message}`;
       if (user === "System") li.className = "system";
       $("messages").appendChild(li);
       $("messages").scrollTop = $("messages").scrollHeight;
+    }
+
+    connection.on("ReceiveMessage", (user, message, sentAt) => addMessage(user, message, sentAt));
+
+    connection.on("LoadHistory", (history) => {
+      $("messages").innerHTML = "";
+      history.forEach(m => addMessage(m.user, m.text, m.sentAt));
     });
 
     // After a connection drop, the server forgets our groups, so rejoin
